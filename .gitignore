@@ -1,0 +1,22 @@
+# ROS2 build artifacts
+build/
+install/
+log/
+
+# Python & CMake cruft
+**/__pycache__/
+**/*.pyc
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Colcon
+.colcon/
+
+# Editor settings
+.vscode/
+.idea/
+
+# Misc
+*.swp
+*.bak
