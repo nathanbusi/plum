@@ -57,7 +57,7 @@
     </link>
 
     <gazebo reference="chassis">
-        <material>Gazebo/Black</material>
+        <material>Gazebo/White</material>
     </gazebo>
 
     <!-- LEFT WHEEL LINK -->
@@ -87,7 +87,7 @@
     </link>
 
     <gazebo reference="left_wheel">
-        <material>Gazebo/Blue</material>
+        <material>Gazebo/Black</material>
     </gazebo>
 
 
@@ -98,7 +98,7 @@
         <parent link="base_link"/>
         <child link="right_wheel"/>
         <origin xyz="0 -0.15 0" rpy="${pi/2} 0 0" />
-        <axis xyz="0 0 1"/>
+        <axis xyz="0 0 -1"/>
     </joint>
 
     <link name="right_wheel">
