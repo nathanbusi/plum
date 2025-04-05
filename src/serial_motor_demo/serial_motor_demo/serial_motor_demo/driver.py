@@ -3,6 +3,7 @@ from rclpy.node import Node
 from serial_motor_demo_msgs.msg import MotorCommand, MotorVels, EncoderVals
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import TransformStamped
+from sensor_msgs.msg import JointState
 import tf2_ros
 import time
 import math
@@ -45,6 +46,7 @@ class MotorDriver(Node):
         self.speed_pub = self.create_publisher(MotorVels, 'motor_vels', 10)
         self.encoder_pub = self.create_publisher(EncoderVals, 'encoder_vals', 10)
         self.odom_pub = self.create_publisher(Odometry, 'odom', 10)
+        self.joint_pub = self.create_publisher(JointState, 'joint_states', 10)
 
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
@@ -107,6 +109,16 @@ class MotorDriver(Node):
             enc_msg.mot_1_enc_val = self.last_m1_enc
             enc_msg.mot_2_enc_val = self.last_m2_enc
             self.encoder_pub.publish(enc_msg)
+
+            # Joint state message
+            joint_msg = JointState()
+            joint_msg.header.stamp = self.get_clock().now().to_msg()
+            joint_msg.name = ['left_wheel_joint', 'right_wheel_joint']
+            joint_msg.position = [
+                self.last_m1_enc * rads_per_ct,
+                self.last_m2_enc * rads_per_ct
+            ]
+            self.joint_pub.publish(joint_msg)
 
             # Odometry message
             odom_msg = Odometry()
