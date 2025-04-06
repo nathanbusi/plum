@@ -2,9 +2,9 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, RegisterEventHandler
+from launch.actions import IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.event_handlers import OnProcessStart
+
 
 def generate_launch_description():
     pkg_path = get_package_share_directory('plum')
@@ -27,22 +27,19 @@ def generate_launch_description():
         )
     )
 
-    delayed_lidar = RegisterEventHandler(
-        OnProcessStart(
-            target_action=robot_launch,
-            on_start=[lidar_launch],
-        )
+    # Delay lidar and camera to ensure robot state is up first
+    delayed_lidar = TimerAction(
+        period=3.0,
+        actions=[lidar_launch]
     )
 
-    delayed_camera = RegisterEventHandler(
-        OnProcessStart(
-            target_action=lidar_launch,
-            on_start=[camera_launch],
-        )
+    delayed_camera = TimerAction(
+        period=3.0,
+        actions=[camera_launch]
     )
 
     return LaunchDescription([
         robot_launch,
         delayed_lidar,
-        delayed_camera,
+        delayed_camera
     ])
