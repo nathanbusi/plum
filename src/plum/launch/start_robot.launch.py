@@ -29,12 +29,12 @@ def generate_launch_description():
 
     # Delay lidar and camera to ensure robot state is up first
     delayed_lidar = TimerAction(
-        period=3.0,
+        period=8.0,
         actions=[lidar_launch]
     )
 
     delayed_camera = TimerAction(
-        period=3.0,
+        period=8.0,
         actions=[camera_launch]
     )
 
