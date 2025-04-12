@@ -31,11 +31,11 @@ def generate_launch_description():
     
     
 
-    joystick = IncludeLaunchDescription(
-                 PythonLaunchDescriptionSource([os.path.join(
-                     get_package_share_directory(package_name),'launch','joystick.launch.py'
-                 )])
-     )
+    # joystick = IncludeLaunchDescription(
+    #              PythonLaunchDescriptionSource([os.path.join(
+    #                  get_package_share_directory(package_name),'launch','joystick.launch.py'
+    #              )])
+    #  )
 
 
     twist_mux_params = os.path.join(get_package_share_directory(package_name),'config','twist_mux.yaml')
@@ -72,11 +72,11 @@ def generate_launch_description():
         )
     )
 
-    # joint_broad_spawner = Node(
-    #     package="controller_manager",
-    #     executable="spawner.py",
-    #     arguments=["joint_broad"],
-    # )
+    joint_broad_spawner = Node(
+    package="controller_manager",
+    executable="spawner.py",
+    arguments=["joint_broad"],
+    )
 
     delayed_joint_broad_spawner = RegisterEventHandler(
         event_handler=OnProcessStart(
