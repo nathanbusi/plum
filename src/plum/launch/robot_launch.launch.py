@@ -72,11 +72,11 @@ def generate_launch_description():
         )
     )
 
-    joint_broad_spawner = Node(
-        package="controller_manager",
-        executable="spawner.py",
-        arguments=["joint_broad"],
-    )
+    # joint_broad_spawner = Node(
+    #     package="controller_manager",
+    #     executable="spawner.py",
+    #     arguments=["joint_broad"],
+    # )
 
     delayed_joint_broad_spawner = RegisterEventHandler(
         event_handler=OnProcessStart(
@@ -111,5 +111,5 @@ def generate_launch_description():
         delayed_diff_drive_spawner,
         delayed_joint_broad_spawner,
         twist_mux,
-        joystick
+        # joystick
     ])
