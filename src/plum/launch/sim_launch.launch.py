@@ -18,7 +18,7 @@ def generate_launch_description():
     default_world_path = os.path.join(
         get_package_share_directory(package_name),
         'worlds',
-        'mytest.world'
+        'indoor_test.world'
     )
     world_arg = DeclareLaunchArgument(
         'world',
