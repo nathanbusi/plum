@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'coverage_planner_node = plum_nodes.coverage_planner_node:main',
             'waypoint_follower = plum_nodes.waypoint_follower:main',
+            'drawbehind = plum_nodes.drawbehind:main',
         ],
     },
 )

@@ -7,6 +7,8 @@ from geometry_msgs.msg import Point, PoseStamped
 from builtin_interfaces.msg import Duration
 import numpy as np
 from scipy.ndimage import binary_dilation, label
+import math
+from tf_transformations import quaternion_from_euler
 
 
 class CoveragePlanner(Node):
@@ -53,7 +55,7 @@ class CoveragePlanner(Node):
         # Obstacle dilation to avoid planning too close
         free_mask = grid == 0
         obstacle_mask = grid == 100
-        dilated = binary_dilation(obstacle_mask, iterations=20)
+        dilated = binary_dilation(obstacle_mask, iterations=12)
         safe_mask = np.logical_and(free_mask, ~dilated)
 
         # Flood-fill filtering: keep only region connected to origin
@@ -69,7 +71,7 @@ class CoveragePlanner(Node):
         safe_coords = np.argwhere(safe_mask)
 
         # Simple tile-based planner
-        tile_size_m = 0.25
+        tile_size_m = 0.5
         tile_size_px = int(tile_size_m / resolution)
         visited_tiles = set()
         tile_points = {}
@@ -82,24 +84,65 @@ class CoveragePlanner(Node):
                 visited_tiles.add(key)
                 tile_points[key] = (x, y)
 
-        sorted_keys = sorted(tile_points.keys(), key=lambda k: (k[0], k[1] if k[0] % 2 == 0 else -k[1]))
-
-        self.waypoints = []
-        for key in sorted_keys:
+        # Convert to world-frame coordinates
+        world_points = []
+        for key in tile_points:
             x, y = tile_points[key]
             wx = origin_x + x * resolution
             wy = origin_y + y * resolution
-            self.waypoints.append((wx, wy))
+            world_points.append((wx, wy))
 
+        # Nearest-neighbor reordering
+        raw_path = []
+        if world_points:
+            visited = set()
+            current = world_points[0]
+            while len(visited) < len(world_points):
+                raw_path.append(current)
+                visited.add(current)
+                next_point = min(
+                    (pt for pt in world_points if pt not in visited),
+                    key=lambda p: math.hypot(p[0] - current[0], p[1] - current[1]),
+                    default=None
+                )
+                current = next_point if next_point else current
+
+        # Combined distance + angle-based pruning
+        pruned_path = []
+        dist_threshold = 4
+        angle_threshold_rad = math.radians(5)
+
+        if len(raw_path) >= 2:
+            pruned_path.append(raw_path[0])
+            for i in range(1, len(raw_path) - 1):
+                x0, y0 = pruned_path[-1]
+                x1, y1 = raw_path[i]
+                x2, y2 = raw_path[i + 1]
+
+                dist = math.hypot(x1 - x0, y1 - y0)
+                v1 = (x1 - x0, y1 - y0)
+                v2 = (x2 - x1, y2 - y1)
+
+                dot = v1[0] * v2[0] + v1[1] * v2[1]
+                norm1 = math.hypot(*v1)
+                norm2 = math.hypot(*v2)
+                angle = math.acos(dot / (norm1 * norm2 + 1e-6)) if norm1 > 0 and norm2 > 0 else 0.0
+
+                if dist > dist_threshold or abs(angle) > angle_threshold_rad:
+                    pruned_path.append(raw_path[i])
+
+            pruned_path.append(raw_path[-1])
+        else:
+            pruned_path = raw_path
+
+        self.waypoints = pruned_path
         self.get_logger().info(f"Planned {len(self.waypoints)} safe, reachable waypoints.")
 
     def timer_callback(self):
         if not self.waypoints:
             return
 
-        limited_waypoints = self.waypoints[:20]  # SLICE
-
-        # Single consistent timestamp
+        limited_waypoints = self.waypoints[:20000]
         now = self.get_clock().now().to_msg()
 
         # Spheres
@@ -139,7 +182,8 @@ class CoveragePlanner(Node):
         path_msg.header.frame_id = "map"
         path_msg.header.stamp = now
 
-        for x, y in limited_waypoints:
+        for i in range(len(limited_waypoints)):
+            x, y = limited_waypoints[i]
             pt = Point(x=x, y=y, z=0.0)
             sphere_marker.points.append(pt)
             line_marker.points.append(pt)
@@ -148,7 +192,20 @@ class CoveragePlanner(Node):
             pose.header.frame_id = "map"
             pose.header.stamp = now
             pose.pose.position = pt
-            pose.pose.orientation.w = 1.0
+
+            # Calculate orientation toward next waypoint
+            if i < len(limited_waypoints) - 1:
+                dx = limited_waypoints[i + 1][0] - x
+                dy = limited_waypoints[i + 1][1] - y
+                yaw = math.atan2(dy, dx)
+                q = quaternion_from_euler(0, 0, yaw)
+                pose.pose.orientation.x = q[0]
+                pose.pose.orientation.y = q[1]
+                pose.pose.orientation.z = q[2]
+                pose.pose.orientation.w = q[3]
+            else:
+                pose.pose.orientation.w = 1.0
+
             path_msg.poses.append(pose)
 
         self.marker_pub.publish(sphere_marker)

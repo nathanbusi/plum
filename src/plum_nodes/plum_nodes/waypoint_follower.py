@@ -4,6 +4,7 @@ from rclpy.action import ActionClient
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
+import time
 
 
 class WaypointFollower(Node):
@@ -34,7 +35,7 @@ class WaypointFollower(Node):
             self.get_logger().warn("Received too few waypoints to follow.")
             return
 
-        self.get_logger().info(f"📡 Received path with {len(msg.poses)} poses.")
+        self.get_logger().info(f"📱 Received path with {len(msg.poses)} poses.")
         self.waypoints = msg.poses
         self.current_index = 0
         self.path_received = True  # <-- prevent future updates
@@ -88,6 +89,7 @@ class WaypointFollower(Node):
         else:
             self.get_logger().info(f"✅ Reached waypoint {self.current_index}.")
 
+        time.sleep(0.3)  # Add a delay before moving to the next waypoint
         self.current_index += 1
         self.send_next_goal()
 
