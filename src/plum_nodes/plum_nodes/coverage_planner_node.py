@@ -42,7 +42,7 @@ class CoveragePlanner(Node):
         obstacle_mask = grid == 100
 
         filled_obstacles = binary_fill_holes(obstacle_mask)
-        dilated = binary_dilation(filled_obstacles, iterations=5)
+        dilated = binary_dilation(filled_obstacles, iterations=4)
         safe_mask = np.logical_and(free_mask, ~dilated)
 
         labeled, num_regions = label(safe_mask)
@@ -69,83 +69,59 @@ class CoveragePlanner(Node):
                 self.get_logger().error("No safe regions found in map.")
                 return
 
-        safe_coords = np.argwhere(room_mask)
-        self.get_logger().info(f"Found {len(safe_coords)} safe pixels in final region")
+        # Generate dense snake path (same as before)
+        fill_spacing_m = 0.3
+        fill_spacing_px = max(1, int(fill_spacing_m / resolution))
 
-        # Tile coverage logic
-        tile_size_m = 0.2
-        tile_size_px = int(tile_size_m / resolution)
-        visited_tiles = set()
-        tile_points = {}
-        max_tiles = 500
+        height, width = room_mask.shape
+        dense_path = []
 
-        for y, x in safe_coords:
-            tile_x = x // tile_size_px
-            tile_y = y // tile_size_px
-            key = (tile_y, tile_x)
-            if key not in visited_tiles:
-                visited_tiles.add(key)
-                tile_points[key] = (x, y)
-                if len(tile_points) >= max_tiles:
-                    break
+        reverse = False
+        for row in range(0, height, fill_spacing_px):
+            line = room_mask[row, :]
+            segments = []
+            current_start = None
 
-        self.get_logger().info(f"Generated {len(tile_points)} unique tile points")
+            for col in range(width):
+                if line[col]:
+                    if current_start is None:
+                        current_start = col
+                else:
+                    if current_start is not None:
+                        if col - current_start >= 2:
+                            segments.append((current_start, col - 1))
+                        current_start = None
+            if current_start is not None and width - current_start >= 2:
+                segments.append((current_start, width - 1))
 
-        # Convert to world coordinates
-        world_points = []
-        for key in tile_points:
-            x, y = tile_points[key]
-            wx = origin_x + x * resolution
-            wy = origin_y + y * resolution
-            world_points.append((wx, wy))
+            for start, end in (segments if not reverse else reversed(segments)):
+                col_range = range(start, end + 1) if not reverse else reversed(range(start, end + 1))
+                for col in col_range:
+                    if room_mask[row, col]:
+                        wx = origin_x + col * resolution
+                        wy = origin_y + row * resolution
+                        dense_path.append((wx, wy))
+            reverse = not reverse
 
-        world_points = world_points[:500]
+        # --- Prune path: keep only points where direction changes ---
+        def direction(p1, p2):
+            dx = round(p2[0] - p1[0], 3)
+            dy = round(p2[1] - p1[1], 3)
+            norm = math.hypot(dx, dy)
+            return (round(dx / norm, 2), round(dy / norm, 2)) if norm > 0 else (0, 0)
 
-        # Nearest-neighbor ordering
-        raw_path = []
-        if world_points:
-            visited = set()
-            current = world_points[0]
-            while len(visited) < len(world_points):
-                raw_path.append(current)
-                visited.add(current)
-                next_point = min(
-                    (pt for pt in world_points if pt not in visited),
-                    key=lambda p: math.hypot(p[0] - current[0], p[1] - current[1]),
-                    default=None
-                )
-                current = next_point if next_point else current
+        simplified = []
+        if dense_path:
+            simplified.append(dense_path[0])
+            for i in range(1, len(dense_path) - 1):
+                d1 = direction(dense_path[i - 1], dense_path[i])
+                d2 = direction(dense_path[i], dense_path[i + 1])
+                if d1 != d2:
+                    simplified.append(dense_path[i])
+            simplified.append(dense_path[-1])
 
-        # Pruning
-        pruned_path = []
-        dist_threshold = 4
-        angle_threshold_rad = math.radians(5)
-
-        if len(raw_path) >= 2:
-            pruned_path.append(raw_path[0])
-            for i in range(1, len(raw_path) - 1):
-                x0, y0 = pruned_path[-1]
-                x1, y1 = raw_path[i]
-                x2, y2 = raw_path[i + 1]
-
-                dist = math.hypot(x1 - x0, y1 - y0)
-                v1 = (x1 - x0, y1 - y0)
-                v2 = (x2 - x1, y2 - y1)
-
-                dot = v1[0] * v2[0] + v1[1] * v2[1]
-                norm1 = math.hypot(*v1)
-                norm2 = math.hypot(*v2)
-                angle = math.acos(dot / (norm1 * norm2 + 1e-6)) if norm1 > 0 and norm2 > 0 else 0.0
-
-                if dist > dist_threshold or abs(angle) > angle_threshold_rad:
-                    pruned_path.append(raw_path[i])
-
-            pruned_path.append(raw_path[-1])
-        else:
-            pruned_path = raw_path
-
-        self.waypoints = pruned_path
-        self.get_logger().info(f"Planned {len(self.waypoints)} safe waypoints.")
+        self.waypoints = simplified
+        self.get_logger().info(f"Reduced {len(dense_path)} dense points to {len(simplified)} simplified waypoints.")
 
     def timer_callback(self):
         if not self.waypoints:
@@ -217,7 +193,7 @@ class CoveragePlanner(Node):
         self.marker_pub.publish(line_marker)
         self.path_pub.publish(path_msg)
 
-        self.get_logger().info(f"Published {len(limited_waypoints)} waypoints.")
+        self.get_logger().info(f"Published {len(limited_waypoints)} final waypoints.")
 
 
 def main(args=None):
