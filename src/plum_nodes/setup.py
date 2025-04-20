@@ -23,6 +23,7 @@ setup(
             'coverage_planner_node = plum_nodes.coverage_planner_node:main',
             'waypoint_follower = plum_nodes.waypoint_follower:main',
             'drawbehind = plum_nodes.drawbehind:main',
+            'rotate_drive_follower = plum_nodes.rotate_drive_follower:main',
         ],
     },
 )

@@ -55,7 +55,7 @@ class CoveragePlanner(Node):
         # Obstacle dilation to avoid planning too close
         free_mask = grid == 0
         obstacle_mask = grid == 100
-        dilated = binary_dilation(obstacle_mask, iterations=12)
+        dilated = binary_dilation(obstacle_mask, iterations=25)
         safe_mask = np.logical_and(free_mask, ~dilated)
 
         # Flood-fill filtering: keep only region connected to origin
@@ -71,7 +71,7 @@ class CoveragePlanner(Node):
         safe_coords = np.argwhere(safe_mask)
 
         # Simple tile-based planner
-        tile_size_m = 0.5
+        tile_size_m = 0.3
         tile_size_px = int(tile_size_m / resolution)
         visited_tiles = set()
         tile_points = {}
