@@ -6,7 +6,7 @@ from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point, PoseStamped
 from builtin_interfaces.msg import Duration
 import numpy as np
-from scipy.ndimage import binary_dilation, label
+from scipy.ndimage import binary_dilation, binary_fill_holes, label
 import math
 from tf_transformations import quaternion_from_euler
 
@@ -17,25 +17,12 @@ class CoveragePlanner(Node):
         self.map_received = False
         self.waypoints = []
 
-        # Subscribe to the map with transient QoS
-        map_qos = QoSProfile(depth=1)
-        map_qos.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
-        self.subscription = self.create_subscription(
-            OccupancyGrid,
-            '/map',
-            self.map_callback,
-            map_qos
-        )
+        qos = QoSProfile(depth=1)
+        qos.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
 
-        # Publish markers with transient QoS
-        marker_qos = QoSProfile(depth=1)
-        marker_qos.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
-        self.marker_pub = self.create_publisher(Marker, '/coverage_path_marker', marker_qos)
-
-        # Publish path as nav_msgs/Path
+        self.subscription = self.create_subscription(OccupancyGrid, '/map', self.map_callback, qos)
+        self.marker_pub = self.create_publisher(Marker, '/coverage_path_marker', qos)
         self.path_pub = self.create_publisher(Path, '/coverage_path', 10)
-
-        # Timer to re-publish markers every second
         self.publish_timer = self.create_timer(1.0, self.timer_callback)
 
         self.get_logger().info("CoveragePlanner node started. Waiting for map...")
@@ -43,7 +30,6 @@ class CoveragePlanner(Node):
     def map_callback(self, msg):
         if self.map_received:
             return
-
         self.map_received = True
         self.get_logger().info("Map received!")
 
@@ -52,29 +38,46 @@ class CoveragePlanner(Node):
         origin_x = msg.info.origin.position.x
         origin_y = msg.info.origin.position.y
 
-        # Obstacle dilation to avoid planning too close
         free_mask = grid == 0
         obstacle_mask = grid == 100
-        dilated = binary_dilation(obstacle_mask, iterations=25)
+
+        filled_obstacles = binary_fill_holes(obstacle_mask)
+        dilated = binary_dilation(filled_obstacles, iterations=5)
         safe_mask = np.logical_and(free_mask, ~dilated)
 
-        # Flood-fill filtering: keep only region connected to origin
         labeled, num_regions = label(safe_mask)
 
         origin_map_x = int(-origin_y / resolution)
         origin_map_y = int(-origin_x / resolution)
         origin_map_x = np.clip(origin_map_x, 0, grid.shape[0] - 1)
         origin_map_y = np.clip(origin_map_y, 0, grid.shape[1] - 1)
+
         origin_region = labeled[origin_map_x, origin_map_y]
+        self.get_logger().info(f"Map origin @ grid ({origin_map_x}, {origin_map_y}) in region {origin_region}")
 
-        safe_mask = labeled == origin_region
-        safe_coords = np.argwhere(safe_mask)
+        if origin_region != 0:
+            room_mask = labeled == origin_region
+            self.get_logger().info("Flood fill from robot start pose succeeded.")
+        else:
+            self.get_logger().warn("Could not find safe region connected to robot start pose. Falling back to largest safe region.")
+            region_sizes = [(np.sum(labeled == i), i) for i in range(1, num_regions + 1)]
+            region_sizes.sort(reverse=True)
+            if region_sizes:
+                largest_region = region_sizes[0][1]
+                room_mask = labeled == largest_region
+            else:
+                self.get_logger().error("No safe regions found in map.")
+                return
 
-        # Simple tile-based planner
-        tile_size_m = 0.3
+        safe_coords = np.argwhere(room_mask)
+        self.get_logger().info(f"Found {len(safe_coords)} safe pixels in final region")
+
+        # Tile coverage logic
+        tile_size_m = 0.2
         tile_size_px = int(tile_size_m / resolution)
         visited_tiles = set()
         tile_points = {}
+        max_tiles = 500
 
         for y, x in safe_coords:
             tile_x = x // tile_size_px
@@ -83,8 +86,12 @@ class CoveragePlanner(Node):
             if key not in visited_tiles:
                 visited_tiles.add(key)
                 tile_points[key] = (x, y)
+                if len(tile_points) >= max_tiles:
+                    break
 
-        # Convert to world-frame coordinates
+        self.get_logger().info(f"Generated {len(tile_points)} unique tile points")
+
+        # Convert to world coordinates
         world_points = []
         for key in tile_points:
             x, y = tile_points[key]
@@ -92,7 +99,9 @@ class CoveragePlanner(Node):
             wy = origin_y + y * resolution
             world_points.append((wx, wy))
 
-        # Nearest-neighbor reordering
+        world_points = world_points[:500]
+
+        # Nearest-neighbor ordering
         raw_path = []
         if world_points:
             visited = set()
@@ -107,7 +116,7 @@ class CoveragePlanner(Node):
                 )
                 current = next_point if next_point else current
 
-        # Combined distance + angle-based pruning
+        # Pruning
         pruned_path = []
         dist_threshold = 4
         angle_threshold_rad = math.radians(5)
@@ -136,7 +145,7 @@ class CoveragePlanner(Node):
             pruned_path = raw_path
 
         self.waypoints = pruned_path
-        self.get_logger().info(f"Planned {len(self.waypoints)} safe, reachable waypoints.")
+        self.get_logger().info(f"Planned {len(self.waypoints)} safe waypoints.")
 
     def timer_callback(self):
         if not self.waypoints:
@@ -145,7 +154,6 @@ class CoveragePlanner(Node):
         limited_waypoints = self.waypoints[:20000]
         now = self.get_clock().now().to_msg()
 
-        # Spheres
         sphere_marker = Marker()
         sphere_marker.header.frame_id = "map"
         sphere_marker.header.stamp = now
@@ -162,7 +170,6 @@ class CoveragePlanner(Node):
         sphere_marker.color.a = 1.0
         sphere_marker.lifetime = Duration(sec=0)
 
-        # Path line
         line_marker = Marker()
         line_marker.header.frame_id = "map"
         line_marker.header.stamp = now
@@ -177,7 +184,6 @@ class CoveragePlanner(Node):
         line_marker.color.a = 1.0
         line_marker.lifetime = Duration(sec=0)
 
-        # Path message
         path_msg = Path()
         path_msg.header.frame_id = "map"
         path_msg.header.stamp = now
@@ -193,7 +199,6 @@ class CoveragePlanner(Node):
             pose.header.stamp = now
             pose.pose.position = pt
 
-            # Calculate orientation toward next waypoint
             if i < len(limited_waypoints) - 1:
                 dx = limited_waypoints[i + 1][0] - x
                 dy = limited_waypoints[i + 1][1] - y
@@ -212,7 +217,7 @@ class CoveragePlanner(Node):
         self.marker_pub.publish(line_marker)
         self.path_pub.publish(path_msg)
 
-        self.get_logger().info(f"Published {len(limited_waypoints)} points as markers + path.")
+        self.get_logger().info(f"Published {len(limited_waypoints)} waypoints.")
 
 
 def main(args=None):
