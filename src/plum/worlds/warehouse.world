@@ -1,0 +1,112 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="default">
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+    <!-- Arena walls -->
+    <model name="arena_walls">
+      <static>true</static>
+      <link name="walls">
+        <!-- North wall -->
+        <collision name="north">
+          <geometry>
+            <box>
+              <size>10 0.1 0.5</size>
+            </box>
+          </geometry>
+          <pose>0 5 0.25 0 0 0</pose>
+        </collision>
+        <visual name="north_vis">
+          <geometry>
+            <box>
+              <size>10 0.1 0.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.5 0.5 0.5 1</ambient>
+          </material>
+          <pose>0 5 0.25 0 0 0</pose>
+        </visual>
+
+        <!-- South wall -->
+        <collision name="south">
+          <geometry>
+            <box>
+              <size>10 0.1 0.5</size>
+            </box>
+          </geometry>
+          <pose>0 -5 0.25 0 0 0</pose>
+        </collision>
+        <visual name="south_vis">
+          <geometry>
+            <box>
+              <size>10 0.1 0.5</size>
+            </box>
+          </geometry>
+          <pose>0 -5 0.25 0 0 0</pose>
+        </visual>
+
+        <!-- East wall -->
+        <collision name="east">
+          <geometry>
+            <box>
+              <size>0.1 10 0.5</size>
+            </box>
+          </geometry>
+          <pose>5 0 0.25 0 0 0</pose>
+        </collision>
+        <visual name="east_vis">
+          <geometry>
+            <box>
+              <size>0.1 10 0.5</size>
+            </box>
+          </geometry>
+          <pose>5 0 0.25 0 0 0</pose>
+        </visual>
+
+        <!-- West wall -->
+        <collision name="west">
+          <geometry>
+            <box>
+              <size>0.1 10 0.5</size>
+            </box>
+          </geometry>
+          <pose>-5 0 0.25 0 0 0</pose>
+        </collision>
+        <visual name="west_vis">
+          <geometry>
+            <box>
+              <size>0.1 10 0.5</size>
+            </box>
+          </geometry>
+          <pose>-5 0 0.25 0 0 0</pose>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Warehouse-ish obstacles -->
+    <include>
+      <uri>model://wooden_crate</uri>
+      <pose>-2 -2 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://wooden_crate</uri>
+      <pose>-2 2 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bookshelf</uri>
+      <pose>0 0 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bookshelf</uri>
+      <pose>2 0 0 0 0 1.57</pose>
+    </include>
+
+    <!-- Lighting -->
+    <include>
+      <uri>model://sun</uri>
+    </include>
+  </world>
+</sdf>

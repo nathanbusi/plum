@@ -12,7 +12,7 @@ def generate_launch_description():
     # Configurable map argument
     map_arg = DeclareLaunchArgument(
         'map',
-        default_value='./test3.yaml',
+        default_value='./apartment.yaml',
         description='Path to the map YAML file'
     )
 

@@ -14,9 +14,10 @@ def generate_launch_description():
                 'use_sim_time': True,
                 'planner_frequency': 1.0,
                 'progress_timeout': 30.0,
-                'potential_scale': 1.0,
+                'potential_scale': 8.0,
                 'gain_scale': 1.0,
-                'frontier_travel_point': 1,
+                'frontier_travel_point': 2,
+                'min_frontier_size': 0.01,  # in meters
                 'costmap_topic': '/global_costmap/costmap'
             }]
         )
