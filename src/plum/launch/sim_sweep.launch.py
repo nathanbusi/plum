@@ -12,7 +12,7 @@ def generate_launch_description():
     # Configurable map argument
     map_arg = DeclareLaunchArgument(
         'map',
-        default_value='./apartment.yaml',
+        default_value='./test7.yaml',
         description='Path to the map YAML file'
     )
 
@@ -69,7 +69,7 @@ def generate_launch_description():
         TimerAction(period=8.0, actions=[]),
 
         follower_node,
-        TimerAction(period=8.0, actions=[]),
+        TimerAction(period=100.0, actions=[]), ###### added long timer for testing of path planner edits
 
         joystick_launch,
     ])
